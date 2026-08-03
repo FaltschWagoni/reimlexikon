@@ -67,7 +67,7 @@
     <div id="resultsContainer">
       <div class="empty-state">Gib oben ein Wort ein, um passende Reime anzuzeigen.</div>
     </div>
-    <footer>Reimlexikon 2.0 – August 2026</footer>
+    <footer>Reimlexikon 2.01 – August 2026</footer>
   </div>
 
   <script>
@@ -1863,17 +1863,62 @@ UUCHTEN;;abgebuchten;abgesuchten;aufgesuchten;ausgebuchten;ausgefluchten;ausgesu
       return Array.from(word).reverse().join('');
     }
 
-    function compareByEnding(a, b) {
-      const reversedA = reverseWord(a.toLocaleLowerCase('de'));
-      const reversedB = reverseWord(b.toLocaleLowerCase('de'));
+    // Häufige deutsche Vorsilben. Sie werden nur für die Sortierung entfernt,
+    // niemals aus den sichtbaren Wörtern oder aus der Datenbank.
+    const sortingPrefixes = [
+      'auseinander', 'aufeinander', 'aneinander', 'durcheinander',
+      'zusammen', 'entgegen', 'hinterher', 'herunter', 'hinunter',
+      'herüber', 'hinüber', 'herein', 'hinein', 'heraus', 'hinaus',
+      'zurück', 'zurecht', 'zunichte', 'vorbei', 'voraus', 'voran',
+      'weiter', 'wieder', 'nieder', 'empor', 'gegenüber',
+      'unter', 'über', 'durch', 'wider',
+      'ab', 'an', 'auf', 'aus', 'bei', 'ein', 'fest', 'fort',
+      'her', 'hin', 'hoch', 'los', 'mit', 'nach', 'um', 'vor',
+      'weg', 'zu', 'be', 'ent', 'er', 'ge', 'miss', 'ver', 'zer'
+    ].sort((a, b) => b.length - a.length);
 
-      const endingComparison = reversedA.localeCompare(
-        reversedB,
+    // Ermittelt für die Anzeige eine Wortfamilie.
+    // Beispiel:
+    //   abgekracht -> kracht
+    //   zusammengekracht -> kracht
+    //   beleben -> leben
+    //   erleben -> leben
+    // Dagegen bleiben "schlacht" und "kleben" eigenständige Familien,
+    // weil "sch-" bzw. "k-" keine Vorsilben aus der Liste sind.
+    function getWordFamily(word) {
+      let family = word.toLocaleLowerCase('de')
+        .replace(/^[^a-zäöüß]+|[^a-zäöüß]+$/gi, '');
+
+      let changed = true;
+      while (changed && family.length > 4) {
+        changed = false;
+
+        for (const prefix of sortingPrefixes) {
+          if (family.startsWith(prefix) && family.length - prefix.length >= 4) {
+            family = family.slice(prefix.length);
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      return family;
+    }
+
+    function compareByEnding(a, b) {
+      const familyA = getWordFamily(a);
+      const familyB = getWordFamily(b);
+
+      // Zuerst die Wortfamilien selbst nach ihrem Ende sortieren.
+      const familyComparison = reverseWord(familyA).localeCompare(
+        reverseWord(familyB),
         'de',
         { sensitivity: 'base', numeric: true }
       );
 
-      if (endingComparison !== 0) return endingComparison;
+      if (familyComparison !== 0) return familyComparison;
+
+      // Innerhalb derselben Familie steht das kürzere Grundwort zuerst.
       if (a.length !== b.length) return a.length - b.length;
 
       return a.localeCompare(b, 'de', { sensitivity: 'base', numeric: true });
