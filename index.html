@@ -31,11 +31,48 @@
     .filter-options { display: flex; gap: 20px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); font-size: 0.9rem; color: var(--text-muted); }
     .status-bar { margin-bottom: 20px; font-size: 0.95rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
     .badge { background: #334155; color: var(--primary-color); padding: 4px 10px; border-radius: 20px; font-weight: bold; font-size: 0.85rem; }
-    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
-    .word-card { background: var(--card-bg); border: 1px solid var(--border-color); padding: 14px 16px; border-radius: 8px; text-align: center; font-size: 1.05rem; font-weight: 500; }
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+    .word-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      padding: 14px 16px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 500;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: clip;
+    }
     .word-card.search-word { border-color: var(--accent-gold); color: var(--accent-gold); font-weight: 700; box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25); }
     footer { margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--border-color); text-align: center; color: var(--text-muted); font-size: 0.85rem; }
     .empty-state { text-align: center; padding: 40px; background: var(--card-bg); border-radius: 12px; border: 1px dashed var(--border-color); color: var(--text-muted); }
+  
+    .word-card.long-word {
+      font-size: 0.96rem;
+    }
+    .word-card.very-long-word {
+      font-size: 0.88rem;
+      grid-column: span 2;
+    }
+    @media (max-width: 620px) {
+      .results-grid {
+        grid-template-columns: 1fr;
+      }
+      .word-card.very-long-word {
+        grid-column: span 1;
+      }
+    }
+      .case-separator {
+      grid-column: 1 / -1;
+      height: 10px;
+    }
   </style>
 </head>
 <body>
@@ -49,7 +86,7 @@
     <div class="search-section">
       <div class="search-box">
         <div class="input-wrapper">
-          <input type="text" id="searchInput" placeholder="Reimwort eingeben …" autocomplete="off" onkeyup="if(event.key==='Enter') searchRhymes()">
+          <input type="text" id="searchInput" placeholder="Reim oder Wort suchen" autocomplete="off" onkeyup="if(event.key==='Enter') searchRhymes()">
         </div>
         <button class="btn-search" onclick="searchRhymes()">Suchen</button>
       </div>
@@ -60,14 +97,14 @@
     </div>
 
     <div class="status-bar">
-      <span id="statusMessage">Reimwort eingeben.</span>
+      <span id="statusMessage">Reim oder Wort suchen.</span>
       <span class="badge" id="wordCountBadge">0 Wörter geladen</span>
     </div>
 
     <div id="resultsContainer">
-      <div class="empty-state">Gib oben ein Wort ein, um passende Reime anzuzeigen.</div>
+      <div class="empty-state">Gib oben einen Reim oder ein Wort ein.</div>
     </div>
-    <footer>Reimlexikon 2.0 – August 2026</footer>
+    <footer>Reimlexikon – Version 2.03<br>© Faltsch Wagoni 2026</footer>
   </div>
 
   <script>
@@ -1914,9 +1951,9 @@ UUCHTEN;;abgebuchten;abgesuchten;aufgesuchten;ausgebuchten;ausgefluchten;ausgesu
       const container = document.getElementById('resultsContainer');
 
       if (!rawInput) {
-        status.innerText = 'Reimwort eingeben.';
+        status.innerText = 'Reim oder Wort suchen.';
         container.innerHTML =
-          '<div class="empty-state">Gib oben ein Reimwort ein, um passende Reime anzuzeigen.</div>';
+          '<div class="empty-state">Gib oben einen Reim oder ein Wort ein.</div>';
         return;
       }
 
@@ -1974,17 +2011,33 @@ UUCHTEN;;abgebuchten;abgesuchten;aufgesuchten;ausgebuchten;ausgefluchten;ausgesu
         return;
       }
 
+      const lowercaseWords = results.filter(word => {
+        const firstLetter = word.match(/[A-Za-zÄÖÜäöüß]/);
+        return !firstLetter || firstLetter[0] === firstLetter[0].toLocaleLowerCase('de');
+      });
+
+      const uppercaseWords = results.filter(word => {
+        const firstLetter = word.match(/[A-Za-zÄÖÜäöüß]/);
+        return firstLetter && firstLetter[0] === firstLetter[0].toLocaleUpperCase('de')
+          && firstLetter[0] !== firstLetter[0].toLocaleLowerCase('de');
+      });
+
       if (sortByEnding) {
-        results.sort(compareByEnding);
+        lowercaseWords.sort(compareByEnding);
+        uppercaseWords.sort(compareByEnding);
       }
 
+      const groupName = selectedGroups.length > 0
+        ? selectedGroups[0].name.toLocaleLowerCase('de')
+        : rawInput.toLocaleLowerCase('de');
+
       status.innerText =
-        `${results.length.toLocaleString('de-DE')} Wörter in der Reimgruppe für „${rawInput}“`;
+        `Reim auf -${groupName} · ${results.length.toLocaleString('de-DE')} Reimwörter`;
 
       const grid = document.createElement('div');
       grid.className = 'results-grid';
 
-      results.forEach(word => {
+      function appendWordCard(word) {
         const card = document.createElement('div');
         card.className = 'word-card';
 
@@ -1993,9 +2046,27 @@ UUCHTEN;;abgebuchten;abgesuchten;aufgesuchten;ausgebuchten;ausgefluchten;ausgesu
           card.setAttribute('aria-label', `${word}, gesuchtes Wort`);
         }
 
+        if (word.length >= 24) {
+          card.classList.add('very-long-word');
+        } else if (word.length >= 18) {
+          card.classList.add('long-word');
+        }
+
         card.innerText = word;
+        card.title = word;
         grid.appendChild(card);
-      });
+      }
+
+      lowercaseWords.forEach(appendWordCard);
+
+      if (lowercaseWords.length > 0 && uppercaseWords.length > 0) {
+        const separator = document.createElement('div');
+        separator.className = 'case-separator';
+        separator.setAttribute('aria-hidden', 'true');
+        grid.appendChild(separator);
+      }
+
+      uppercaseWords.forEach(appendWordCard);
 
       container.innerHTML = '';
       container.appendChild(grid);
